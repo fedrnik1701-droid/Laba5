@@ -1,0 +1,502 @@
+{
+  "info": {
+    "name": "Лабораторная 5 — JWT и сессии",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "Вход библиотекаря",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"librarian@example.com\",\n  \"password\": \"Librarian123!\",\n  \"deviceId\": \"postman\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const pair = pm.response.json();",
+              "pm.test(\"Ответ содержит пару JWT\", () => {",
+              "  pm.expect(pair.accessToken.split(\".\")).to.have.lengthOf(3);",
+              "  pm.expect(pair.refreshToken.split(\".\")).to.have.lengthOf(3);",
+              "});",
+              "pm.collectionVariables.set(\"access\", pair.accessToken);",
+              "pm.collectionVariables.set(\"refresh\", pair.refreshToken);",
+              "pm.collectionVariables.set(\"email\", \"reader\" + Date.now() + \"@example.com\");"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Доступ по access JWT",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/readers",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Без токена",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/books",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh не даёт доступ к API",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/books",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{refresh}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access нельзя обменять на пару",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/refresh",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{access}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Обмен refresh на новую пару",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/refresh",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refresh}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const pair = pm.response.json();",
+              "pm.test(\"Ответ содержит пару JWT\", () => {",
+              "  pm.expect(pair.accessToken.split(\".\")).to.have.lengthOf(3);",
+              "  pm.expect(pair.refreshToken.split(\".\")).to.have.lengthOf(3);",
+              "});",
+              "pm.collectionVariables.set(\"newAccess\", pair.accessToken);",
+              "pm.collectionVariables.set(\"newRefresh\", pair.refreshToken);",
+              "pm.test(\"Оба токена изменились\", () => {",
+              "  pm.expect(pair.accessToken).not.to.eql(pm.collectionVariables.get(\"access\"));",
+              "  pm.expect(pair.refreshToken).not.to.eql(pm.collectionVariables.get(\"refresh\"));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Повтор старого refresh",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/refresh",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refresh}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Отозванный refresh",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/refresh",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refresh}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Доступ по новому access",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/books",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{newAccess}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Неверный пароль",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"librarian@example.com\",\n  \"password\": \"wrong\",\n  \"deviceId\": \"postman\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Отсутствует refreshToken",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/refresh",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Регистрация с выдачей JWT",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Читатель\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Reader123!\",\n  \"role\": \"LIBRARIAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "const pair = pm.response.json();",
+              "pm.test(\"Ответ содержит пару JWT\", () => {",
+              "  pm.expect(pair.accessToken.split(\".\")).to.have.lengthOf(3);",
+              "  pm.expect(pair.refreshToken.split(\".\")).to.have.lengthOf(3);",
+              "});",
+              "pm.collectionVariables.set(\"readerAccess\", pair.accessToken);",
+              "pm.collectionVariables.set(\"readerRefresh\", pair.refreshToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Читатель не получает права библиотекаря",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/readers",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{readerAccess}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Повторная регистрация",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/auth/register",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Читатель\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Reader123!\",\n  \"role\": \"LIBRARIAN\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"Ошибка без токенов\", () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).not.to.have.property(\"accessToken\");",
+              "  pm.expect(data).not.to.have.property(\"refreshToken\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

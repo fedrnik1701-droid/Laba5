@@ -1,0 +1,9 @@
+- Лабораторная 5 на основе Laba4. Запуск через `mvn spring-boot:run`, API на http://localhost:8080.
+- Вход через `POST /auth/login`. JSON: `{"username":"librarian@example.com","password":"Librarian123!","deviceId":"postman"}`. username — email, deviceId необязателен. Читатель для проверки — ivan@example.com / Reader123!.
+- Регистрация через `POST /auth/register`. JSON: `{"fullName":"Имя","email":"new@example.com","password":"Reader123!"}`. Роль всегда READER.
+- Вход, регистрация и обмен возвращают `accessToken` и `refreshToken`. Для API передайте `Authorization: Bearer <accessToken>`. Для `POST /auth/refresh` передайте JSON `{"refreshToken":"…"}`.
+- Оба JWT подписаны HS256, содержат sub, uid, iat, exp, jti и type. Сроки по умолчанию 15 минут и 7 дней. Настройки — JWT_ACCESS_TTL и JWT_REFRESH_TTL. JWT_SECRET принимает ключ в Base64 (не менее 32 байт), без настройки ключ генерируется при запуске.
+- В H2 таблица user_sessions создаётся через JPA. После входа сессия ACTIVE. При обмене прежняя становится USED, новая — ACTIVE. Повтор старого refresh переводит его в REVOKED и возвращает 401 без новой пары. H2 работает в памяти до остановки приложения.
+- Ошибки: 400 — обязательное поле отсутствует или не прошло проверку, 401 — неверный вход или токен, 403 — нет прав, 409 — email уже занят.
+- Импортируйте collection.json в Postman и запустите запросы по порядку. `mvn test` проверяет в том числе статусы записей в БД и конкурентный обмен.
+- Справка по JWT — https://www.jwt.io/introduction и https://www.rfc-editor.org/rfc/rfc7519.html.
